@@ -10,6 +10,8 @@ const errorHandler = (error, req, res, next) => {
 
   if (error.name === 'CastError') {
     return res.status(400).send({ error: 'malformatted id' })
+  } else if (error.name === 'ValidationError') {
+    return res.status(400).json({ error: error.message })
   }
 
   next(error)
@@ -23,7 +25,7 @@ app.use(express.json())
 app.use(cors())
 app.use(express.static('build'))
 
-morgan.token('requestJson', function (req, res) {
+morgan.token('requestJson', function (req) {
   if (req.method === 'POST') {
     return JSON.stringify(req.body)
   } else return
@@ -55,13 +57,13 @@ app.get('/api/persons/:id', (req, res, next) => {
 
 app.delete('/api/persons/:id', (req, res, next) => {
   Person.findByIdAndRemove(req.params.id)
-    .then((result) => {
+    .then(() => {
       res.status(204).end()
     })
     .catch((error) => next(error))
 })
 
-app.post('/api/persons', (req, res) => {
+app.post('/api/persons', (req, res, next) => {
   const body = req.body
 
   if (!body.name || !body.number) {
@@ -73,20 +75,26 @@ app.post('/api/persons', (req, res) => {
     number: body.number,
   })
 
-  person.save().then((savedPerson) => {
-    res.json(savedPerson)
-  })
+  person
+    .save()
+    .then((savedPerson) => {
+      res.json(savedPerson)
+    })
+    .catch((error) => next(error))
 })
 
 app.put('/api/persons/:id', (req, res, next) => {
-  const body = req.body
+  const { name, number } = req.body
 
-  const person = {
-    name: body.name,
-    number: body.number,
-  }
-
-  Person.findByIdAndUpdate(req.params.id, person, { new: true })
+  Person.findByIdAndUpdate(
+    req.params.id,
+    { name, number },
+    {
+      new: true,
+      runValidators: true,
+      context: 'query',
+    }
+  )
     .then((updatedPerson) => {
       res.json(updatedPerson)
     })
